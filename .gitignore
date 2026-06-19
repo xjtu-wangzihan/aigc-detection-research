@@ -1,0 +1,14 @@
+results/smoke_metrics.json
+scripts/__pycache__/prepare_benchmark.cpython-312.pyc
+data/sample_dataset.csv
+demo/__pycache__/app.cpython-312.pyc
+models/hybrid.joblib
+src/aigc_detector/__pycache__/__init__.cpython-312.pyc
+src/aigc_detector/__pycache__/attacks.cpython-312.pyc
+src/aigc_detector/__pycache__/datasets.cpython-312.pyc
+src/aigc_detector/__pycache__/evaluate.cpython-312.pyc
+src/aigc_detector/__pycache__/explain.cpython-312.pyc
+src/aigc_detector/__pycache__/features.cpython-312.pyc
+src/aigc_detector/__pycache__/models.cpython-312.pyc
+src/aigc_detector/__pycache__/predict.cpython-312.pyc
+src/aigc_detector/__pycache__/train.cpython-312.pyc
