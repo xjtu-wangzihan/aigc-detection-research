@@ -27,7 +27,7 @@ def load_dataset(path: str | Path) -> pd.DataFrame:
     if missing:
         raise ValueError(f"Dataset is missing required columns: {sorted(missing)}")
     df = df.copy()
-    df[TEXT_COL] = df[TEXT_COL].astype(str).fillna("")
+    df[TEXT_COL] = df[TEXT_COL].fillna("").astype(str).str.strip()
     df[LABEL_COL] = df[LABEL_COL].map(normalize_label).astype(int)
     for optional in ["domain", "source", "attack"]:
         if optional not in df.columns:

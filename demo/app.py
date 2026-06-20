@@ -8,11 +8,11 @@ import pandas as pd
 import streamlit as st
 
 ROOT = Path(__file__).resolve().parents[1]
-MODULE_DIR = ROOT / "src" / "aigc_detector"
+MODULE_DIR = ROOT/"src"/"aigc_detector"
 if str(MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(MODULE_DIR))
 
-from datasets import TEXT_COL, load_dataset  # noqa: E402
+from data_utils import TEXT_COL, load_dataset  # noqa: E402
 from evaluate import positive_scores  # noqa: E402
 from explain import explain_linear_text  # noqa: E402
 from models import build_model  # noqa: E402

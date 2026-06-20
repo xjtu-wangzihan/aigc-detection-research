@@ -4,7 +4,7 @@ import re
 
 import pandas as pd
 
-from datasets import TEXT_COL
+from data_utils import TEXT_COL
 
 
 CONNECTOR_REPLACEMENTS = {
