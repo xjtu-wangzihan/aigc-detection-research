@@ -110,7 +110,6 @@ def main():
         print(f"[{index}/{len(jobs)}] " + subprocess.list2cmdline(command), flush=True)
         if not args.dry_run:
             result.parent.mkdir(parents=True, exist_ok=True)
-            # subprocess.run(command, cwd=ROOT, check=True)
             result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
             if result.returncode != 0:
                 print("STDOUT:", result.stdout)

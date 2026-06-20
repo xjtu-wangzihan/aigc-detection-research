@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -33,11 +34,15 @@ def require_deep_dependencies():
 
 
 def build_encoder(spec: DeepModelSpec):
-    _, AutoModel, _ = require_deep_dependencies()
+    torch, AutoModel, _ = require_deep_dependencies()
     encoder = AutoModel.from_pretrained(spec.encoder_name)
     if hasattr(encoder.config, "use_cache"):
         encoder.config.use_cache = False
     if spec.tuning == "lora":
+        # PEFT 0.19.x checks torch.distributed.tensor on PyTorch >= 2.5,
+        # but PyTorch 2.5 does not expose that lazy submodule until imported.
+        if torch.distributed.is_available() and not hasattr(torch.distributed, "tensor"):
+            importlib.import_module("torch.distributed.tensor")
         try:
             from peft import LoraConfig, TaskType, get_peft_model
         except ImportError as exc:
@@ -53,6 +58,8 @@ def build_encoder(spec: DeepModelSpec):
                 bias="none",
             ),
         )
+        if hasattr(encoder, "enable_input_require_grads"):
+            encoder.enable_input_require_grads()
     elif spec.tuning != "full":
         raise ValueError("tuning must be 'full' or 'lora'")
     return encoder
@@ -116,15 +123,20 @@ def save_checkpoint(model, tokenizer, scaler, output_dir: str | Path) -> None:
     torch, _, _ = require_deep_dependencies()
     target = Path(output_dir)
     target.mkdir(parents=True, exist_ok=True)
-    # model.encoder.save_pretrained(target / "encoder")
-    state_dict = {
-    key: value.contiguous()
-    for key, value in model.encoder.state_dict().items()
-    }
-    model.encoder.save_pretrained(
-        target / "encoder",
-        state_dict=state_dict,
-    )
+    encoder_dir = target / "encoder"
+    if model.spec.tuning == "lora":
+        # Let PEFT extract and save only adapter weights and adapter_config.json.
+        model.encoder.save_pretrained(str(encoder_dir))
+    else:
+        # safetensors rejects non-contiguous tensors in some full-tuning models.
+        state_dict = {
+            key: value.contiguous()
+            for key, value in model.encoder.state_dict().items()
+        }
+        model.encoder.save_pretrained(
+            str(encoder_dir),
+            state_dict=state_dict,
+        )
     tokenizer.save_pretrained(target / "tokenizer")
     torch.save(model.classifier.state_dict(), target / "classifier.pt")
     (target / "model_spec.json").write_text(
@@ -146,7 +158,7 @@ def load_checkpoint(checkpoint_dir: str | Path):
     if spec.tuning == "lora":
         from peft import PeftModel
         encoder = PeftModel.from_pretrained(
-            AutoModel.from_pretrained(spec.encoder_name), target / "encoder"
+            AutoModel.from_pretrained(spec.encoder_name), str(target / "encoder")
         )
     else:
         encoder = AutoModel.from_pretrained(target / "encoder")
