@@ -19,6 +19,7 @@ def parse_args():
     parser.add_argument("--profile", default="course", choices=["course"])
     parser.add_argument("--benchmarks", default="all", help="all or comma-separated benchmark names")
     parser.add_argument("--families", default="classical,deep", help="classical,deep")
+    parser.add_argument("--seed", type=int, default=42, help="single seed used by all model families")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -41,32 +42,31 @@ def split_paths(benchmark):
     return paths
 
 
-def classical_commands(benchmark, paths):
+def classical_commands(benchmark, paths, seed):
     for method in CLASSICAL:
-        for seed in (42, 43, 44):
-            result = ROOT / "results" / benchmark / method / f"seed_{seed}.json"
-            model = ROOT / "models" / benchmark / method / f"seed_{seed}.joblib"
-            command = [
-                sys.executable, str(ROOT / "src" / "aigc_detector" / "train.py"),
-                "--data", str(paths["train"]), "--val-data", str(paths["val"]),
-                "--test-data", str(paths["test"]), "--benchmark", benchmark,
-                "--model", method, "--seed", str(seed), "--out", str(model),
-                "--metrics", str(result), "--robust",
-            ]
-            yield command, result
+        result = ROOT / "results" / benchmark / method / f"seed_{seed}.json"
+        model = ROOT / "models" / benchmark / method / f"seed_{seed}.joblib"
+        command = [
+            sys.executable, str(ROOT / "src" / "aigc_detector" / "train.py"),
+            "--data", str(paths["train"]), "--val-data", str(paths["val"]),
+            "--test-data", str(paths["test"]), "--benchmark", benchmark,
+            "--model", method, "--seed", str(seed), "--out", str(model),
+            "--metrics", str(result), "--robust",
+        ]
+        yield command, result
 
 
-def deep_commands(benchmark, paths):
+def deep_commands(benchmark, paths, seed):
     for mode in DEEP:
         suffix = "style" if mode == "fusion" else "encoder"
         method = ("roberta" if benchmark == "hc3_zh" else "xlmr") + f"_{suffix}"
-        result = ROOT / "results" / benchmark / method / "seed_42.json"
-        model = ROOT / "models" / "deep" / benchmark / method / "seed_42"
+        result = ROOT / "results" / benchmark / method / f"seed_{seed}.json"
+        model = ROOT / "models" / "deep" / benchmark / method / f"seed_{seed}"
         command = [
             sys.executable, str(ROOT / "scripts" / "train_deep.py"),
             "--benchmark", benchmark, "--train-data", str(paths["train"]),
             "--val-data", str(paths["val"]), "--test-data", str(paths["test"]),
-            "--mode", mode, "--seed", "42", "--out", str(model),
+            "--mode", mode, "--seed", str(seed), "--out", str(model),
             "--metrics", str(result), "--robust",
         ]
         yield command, result
@@ -97,9 +97,9 @@ def main():
     for benchmark in benchmarks:
         paths = split_paths(benchmark)
         if "classical" in families:
-            jobs.extend(classical_commands(benchmark, paths))
+            jobs.extend(classical_commands(benchmark, paths, args.seed))
         if "deep" in families:
-            jobs.extend(deep_commands(benchmark, paths))
+            jobs.extend(deep_commands(benchmark, paths, args.seed))
 
     completed, skipped = 0, 0
     for index, (command, result) in enumerate(jobs, 1):

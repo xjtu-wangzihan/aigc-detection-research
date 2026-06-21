@@ -19,6 +19,7 @@ from evaluate import metrics_from_predictions
 from features import StylometricTransformer
 from prepare_benchmark import collect_rows
 from build_benchmark_splits import split_grouped, validate
+from aggregate_results import single_run_table
 from train_deep import style_arrays
 
 
@@ -79,6 +80,16 @@ class CoreTests(unittest.TestCase):
             {k: sorted(v.group_id) for k, v in one.items()},
             {k: sorted(v.group_id) for k, v in two.items()},
         )
+
+    def test_single_run_summary_columns(self):
+        frame = pd.DataFrame([{
+            "benchmark": "hc3", "method": "style", "seed": 42,
+            "accuracy": 0.9, "f1": 0.8,
+        }])
+        summary = single_run_table(frame, ["benchmark", "method"], ["accuracy", "f1"])
+        self.assertEqual(list(summary.columns), ["benchmark", "method", "seed", "accuracy", "f1"])
+        self.assertNotIn("runs", summary.columns)
+        self.assertNotIn("±", summary.to_csv(index=False))
 
 
 @unittest.skipUnless(
