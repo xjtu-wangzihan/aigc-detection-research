@@ -51,8 +51,6 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float)
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--robust", action="store_true")
-    parser.add_argument("--max-train-samples", type=int)
-    parser.add_argument("--max-eval-samples", type=int)
     return parser.parse_args()
 
 
@@ -99,10 +97,6 @@ class StyleCollator:
         return batch
 
 
-def limit(frame, maximum, seed):
-    return frame.sample(n=maximum, random_state=seed).reset_index(drop=True) if maximum and len(frame) > maximum else frame
-
-
 def style_arrays(train_df, val_df, test_df, use_style):
     if not use_style:
         zeros = [np.zeros((len(frame), 12), dtype=np.float32) for frame in (train_df, val_df, test_df)]
@@ -133,9 +127,9 @@ def main():
     accumulation = args.gradient_accumulation or (2 if tuning == "full" else 4)
     learning_rate = args.learning_rate or (2e-5 if tuning == "full" else 1e-4)
 
-    train_df = limit(load_dataset(args.train_data), args.max_train_samples, args.seed)
-    val_df = limit(load_dataset(args.val_data), args.max_eval_samples, args.seed)
-    test_df = limit(load_dataset(args.test_data), args.max_eval_samples, args.seed)
+    train_df = load_dataset(args.train_data)
+    val_df = load_dataset(args.val_data)
+    test_df = load_dataset(args.test_data)
     scaler, train_style, val_style, test_style = style_arrays(train_df, val_df, test_df, use_style)
     tokenizer = AutoTokenizer.from_pretrained(encoder_name, use_fast=True)
     train_set = CsvTextDataset(train_df, tokenizer, args.max_length, train_style)

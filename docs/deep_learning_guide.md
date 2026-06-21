@@ -14,10 +14,9 @@
 ## 运行顺序
 
 1. 运行 build_benchmark_splits.py，并检查每个 manifest.json。
-2. 使用 100 条样本、1 epoch 做 Chinese RoBERTa 和 XLM-R 两次烟测。
-3. 用 nvidia-smi 观察峰值显存，超过 6 GB 时先把 batch size 减半并相应增加 gradient accumulation。
-4. 依次运行 hc3_zh、hc3、mage、raid 的 encoder 和 fusion。
-5. 运行 aggregate_results.py，并检查每个表格单元能追溯到 seed_*.json。
+2. 用 nvidia-smi 观察峰值显存，超过可用显存时先把 batch size 减半并相应增加 gradient accumulation。
+3. 依次运行 hc3_zh、hc3、mage、raid 的 encoder 和 fusion。
+4. 运行 aggregate_results.py，并检查每个表格单元能追溯到 seed_*.json。
 
 ## 断点与恢复
 

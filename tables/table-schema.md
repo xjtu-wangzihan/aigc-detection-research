@@ -9,4 +9,4 @@
 | 分领域 | benchmark/method/domain | n/Accuracy/F1/AUROC/Human FPR | seed JSON by_domain | 待完整实验 |
 | 效率 | benchmark/method | train/inference/model size/GPU memory | seed JSON + nvidia-smi log | GPU memory 待记录 |
 
-提交前检查：不得将旧 75/25 HC3 结果放入统一主表；不得使用 smoke 数据；待实验标记只能由聚合产物中的真实数值替换。
+提交前检查：不得将旧 75/25 HC3 结果放入统一主表；待实验标记只能由聚合产物中的真实数值替换。

@@ -157,6 +157,8 @@ def load_checkpoint(checkpoint_dir: str | Path):
     spec = DeepModelSpec(**raw)
     if spec.tuning == "lora":
         from peft import PeftModel
+        if torch.distributed.is_available() and not hasattr(torch.distributed, "tensor"):
+            importlib.import_module("torch.distributed.tensor")
         encoder = PeftModel.from_pretrained(
             AutoModel.from_pretrained(spec.encoder_name), str(target / "encoder")
         )
