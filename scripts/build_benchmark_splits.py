@@ -48,14 +48,47 @@ def normalize(frame: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-def balanced_sample(frame: pd.DataFrame, per_class: int, seed: int) -> pd.DataFrame:
+def balanced_sample(
+    frame: pd.DataFrame, per_class: int, seed: int, allow_shortfall: bool = False
+) -> pd.DataFrame:
     parts = []
     for label in (0, 1):
         part = frame[frame["label"] == label]
-        if len(part) < per_class:
+        if len(part) < per_class and not allow_shortfall:
             raise ValueError(f"Label {label} has {len(part)} rows; expected {per_class}.")
-        parts.append(part.sample(n=per_class, random_state=seed))
+        sample_size = min(len(part), per_class)
+        if sample_size == 0:
+            raise ValueError(f"Label {label} has no rows after leakage removal.")
+        parts.append(part.sample(n=sample_size, random_state=seed))
     return pd.concat(parts, ignore_index=True).sample(frac=1, random_state=seed).reset_index(drop=True)
+
+
+def remove_cross_split_leakage(parts: dict[str, pd.DataFrame]):
+    """Remove later-split rows that repeat an earlier group or exact text.
+
+    Official split priority is train, then validation, then test. Rows are never
+    moved between splits because doing so would change their official role.
+    """
+    cleaned, audit = {}, {}
+    seen_groups: set[str] = set()
+    seen_texts: set[str] = set()
+    for name in ("train", "val", "test"):
+        frame = parts[name].copy()
+        repeated_group = frame["group_id"].isin(seen_groups)
+        repeated_text = frame["text"].isin(seen_texts)
+        remove = repeated_group | repeated_text
+        kept = frame.loc[~remove].reset_index(drop=True)
+        cleaned[name] = kept
+        audit[name] = {
+            "input_rows": int(len(frame)),
+            "removed_rows": int(remove.sum()),
+            "repeated_group_rows": int(repeated_group.sum()),
+            "repeated_text_rows": int(repeated_text.sum()),
+            "output_rows": int(len(kept)),
+        }
+        seen_groups.update(kept["group_id"])
+        seen_texts.update(kept["text"])
+    return cleaned, audit
 
 
 def split_grouped(frame: pd.DataFrame, seed: int):
@@ -110,14 +143,19 @@ def missing_instructions(benchmark: str, input_dir: Path) -> str:
 
 
 def build_one(benchmark: str, input_dir: Path, output_root: Path, seed: int):
+    decontamination = None
     if benchmark == "mage":
         paths = {name: input_dir / filename for name, filename in MAGE_FILES.items()}
         if any(not path.exists() for path in paths.values()):
             raise FileNotFoundError(missing_instructions(benchmark, input_dir))
+        normalized = {
+            name: normalize(pd.read_csv(path)) for name, path in paths.items()
+        }
+        cleaned, decontamination = remove_cross_split_leakage(normalized)
         parts = {
-            "train": balanced_sample(normalize(pd.read_csv(paths["train"])), 3000, seed),
-            "val": balanced_sample(normalize(pd.read_csv(paths["val"])), 1000, seed),
-            "test": balanced_sample(normalize(pd.read_csv(paths["test"])), 1000, seed),
+            "train": balanced_sample(cleaned["train"], 3000, seed, allow_shortfall=True),
+            "val": balanced_sample(cleaned["val"], 1000, seed, allow_shortfall=True),
+            "test": balanced_sample(cleaned["test"], 1000, seed, allow_shortfall=True),
         }
         sources = paths
     else:
@@ -143,6 +181,8 @@ def build_one(benchmark: str, input_dir: Path, output_root: Path, seed: int):
             for n, f in parts.items()
         },
     }
+    if decontamination is not None:
+        manifest["decontamination"] = decontamination
     (target / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest
 
@@ -156,6 +196,25 @@ def self_test():
     assert {k: sorted(v.group_id) for k, v in first.items()} == {
         k: sorted(v.group_id) for k, v in second.items()
     }
+    official = {
+        "train": pd.DataFrame([
+            {"text": "shared text", "label": 0, "group_id": "train-human"},
+            {"text": "train machine", "label": 1, "group_id": "train-machine"},
+        ]),
+        "val": pd.DataFrame([
+            {"text": "shared text", "label": 0, "group_id": "different-id"},
+            {"text": "validation machine", "label": 1, "group_id": "shared-group"},
+            {"text": "validation human", "label": 0, "group_id": "val-human"},
+        ]),
+        "test": pd.DataFrame([
+            {"text": "different text", "label": 1, "group_id": "shared-group"},
+            {"text": "test human", "label": 0, "group_id": "test-human"},
+        ]),
+    }
+    cleaned, audit = remove_cross_split_leakage(official)
+    assert cleaned["val"]["text"].tolist() == ["validation machine", "validation human"]
+    assert cleaned["test"]["text"].tolist() == ["test human"]
+    assert audit["val"]["removed_rows"] == 1 and audit["test"]["removed_rows"] == 1
     print("SPLIT SELF-TEST: OK")
 
 
